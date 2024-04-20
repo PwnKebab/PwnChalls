@@ -1,0 +1,10 @@
+version: "3"
+services:
+  quememu:
+    build: .
+    platform: linux/amd64
+    restart: always
+    ports:
+      - "1637:1637"
+    expose:
+      - "1637"

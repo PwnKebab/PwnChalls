@@ -1,0 +1,7 @@
+version: '3'
+services:
+  pwn:
+    build: .
+    restart: always
+    ports:
+      - 9990:9990

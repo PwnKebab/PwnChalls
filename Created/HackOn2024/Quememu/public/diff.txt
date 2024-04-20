@@ -1,0 +1,199 @@
+commit 40192e9557fccd3982e17d533fae9f1b0103624d
+Author: Pwnkebab <pwnkebab@gmail.com>
+Date:   Tue Feb 6 16:13:11 2024 +0000
+
+    QueMemu device
+
+diff --git a/hw/misc/meson.build b/hw/misc/meson.build
+index e4ef1da5a5..022755ced9 100644
+--- a/hw/misc/meson.build
++++ b/hw/misc/meson.build
+@@ -153,6 +153,8 @@ specific_ss.add(when: 'CONFIG_MIPS_CPS', if_true: files('mips_cmgcr.c', 'mips_cp
+ specific_ss.add(when: 'CONFIG_MIPS_ITU', if_true: files('mips_itu.c'))
+ 
+ system_ss.add(when: 'CONFIG_SBSA_REF', if_true: files('sbsa_ec.c'))
++system_ss.add(files('quememu.c'))
++
+ 
+ # HPPA devices
+ system_ss.add(when: 'CONFIG_LASI', if_true: files('lasi.c'))
+diff --git a/hw/misc/quememu.c b/hw/misc/quememu.c
+new file mode 100644
+index 0000000000..c4c0b2ca77
+--- /dev/null
++++ b/hw/misc/quememu.c
+@@ -0,0 +1,176 @@
++#include "qemu/osdep.h"
++#include "qemu/units.h"
++#include "hw/pci/pci.h"
++#include "hw/hw.h"
++#include "hw/pci/msi.h"
++#include "qemu/timer.h"
++#include "qom/object.h"
++#include "qemu/module.h"
++#include "qapi/visitor.h"
++#include <math.h>
++
++#define TYPE_PCI_QUEMEMU_DEVICE "quememu"
++#define QUEMEMU_MMIO_SIZE 0x10000
++#define BUFF_SIZE 0x10000
++#define MAX_BASE 20
++#define MAX_RW BUFF_SIZE - (pow(MAX_BASE,3)*0x7 + pow(MAX_BASE,2)*0xF + MAX_BASE*0xF + 0xF - 1)
++
++typedef unsigned char base_t;
++
++typedef struct{
++    PCIDevice pdev;
++    MemoryRegion mmio;
++    char buff[BUFF_SIZE];
++    struct {
++        base_t base;
++        short off;
++		hwaddr src; 
++	} state;
++} QueMemuState;
++
++DECLARE_INSTANCE_CHECKER(QueMemuState, QUEMEMU, TYPE_PCI_QUEMEMU_DEVICE)
++
++static unsigned char consume_nibble(unsigned short *n)
++{
++	unsigned char nibble = *n<<4;
++	nibble = nibble>>4;
++	*n = *n>>4;
++
++	return nibble;
++}
++
++static void trigger_rw(QueMemuState *quememu, bool is_write) 
++{
++    if (quememu->state.base == 0)
++        return;
++
++    if (quememu->state.base == 0x10) // Don't change base cause we already use base 16
++    { 
++        cpu_physical_memory_rw(quememu->state.src, &quememu->buff[quememu->state.off], MAX_RW, is_write);
++        return;
++    }
++
++    unsigned short n = quememu->state.off;
++	unsigned long long multiplier = 1, new_off = 0;
++
++	for (int i = 0; i < sizeof(n)*2; ++i)
++	{
++        // Use nibble % base (e.g. 7 in base 3 = 1)
++        new_off += (consume_nibble(&n) % quememu->state.base) * multiplier; 
++		multiplier *= quememu->state.base;
++	}
++    cpu_physical_memory_rw(quememu->state.src, &quememu->buff[new_off], MAX_RW, is_write);
++}
++
++static uint64_t quememu_mmio_read(void *opaque, hwaddr addr, unsigned size) {
++    QueMemuState *quememu = (QueMemuState *)opaque;
++    uint64_t val = 0;
++    switch (addr)
++    {
++        case 0x00:
++            trigger_rw(quememu, 1);
++            break;
++        case 0x04:
++            val = quememu->state.base;
++            break;
++        case 0x08:
++            val = quememu->state.off;
++            break;
++        case 0x0c:
++            val = quememu->state.src;
++            break;
++        default:
++            val = 0xFABADA;
++            break;
++    }
++    return val;
++}
++
++static void quememu_mmio_write(void *opaque, hwaddr addr, uint64_t val, unsigned size) {
++    QueMemuState *quememu = (QueMemuState *)opaque;
++    switch (addr) 
++    {
++        case 0x00:
++            trigger_rw(quememu, 0);
++            break;
++        case 0x04:
++            if ((base_t) val <= MAX_BASE) quememu->state.base = val;
++            break;
++        case 0x08:
++            if ((short) val >= 0) quememu->state.off = val;
++            break;
++        case 0x0c:
++            quememu->state.src = val;
++            break;
++        default:
++            break;
++    }
++}
++
++static const MemoryRegionOps quememu_mmio_ops =
++{
++    .read = quememu_mmio_read,
++    .write = quememu_mmio_write,
++    .endianness = DEVICE_NATIVE_ENDIAN,
++    .valid = 
++    {
++        .min_access_size = 4,
++        .max_access_size = 4,
++    },
++    .impl = 
++    {
++        .min_access_size = 4,
++        .max_access_size = 4,
++    },
++};
++
++static void pci_quememu_realize(PCIDevice *pdev, Error **errp)
++{
++    QueMemuState *quememu = QUEMEMU(pdev);
++    memory_region_init_io(&quememu->mmio, OBJECT(quememu), &quememu_mmio_ops, quememu, "quememu-mmio", QUEMEMU_MMIO_SIZE);
++    pci_register_bar(pdev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &quememu->mmio);
++}
++
++static void quememu_instance_init(Object *obj)
++{
++    QueMemuState *quememu = QUEMEMU(obj);
++    memset(&quememu->state, 0, sizeof(quememu->state));
++    memset(quememu->buff, 0, sizeof(quememu->buff));
++}
++
++static void quememu_class_init(ObjectClass *class, void *data)
++{
++    DeviceClass *dc = DEVICE_CLASS(class);
++    PCIDeviceClass *k = PCI_DEVICE_CLASS(class);
++    k->realize = pci_quememu_realize;
++    k->vendor_id = PCI_VENDOR_ID_QEMU;
++    k->device_id = 0xFACE;
++    k->revision = 0x0;
++    k->class_id = PCI_CLASS_OTHERS;
++
++    set_bit(DEVICE_CATEGORY_MISC, dc->categories);
++}
++
++static void pci_quememu_register_types(void)
++{
++    static InterfaceInfo interfaces[] =
++    {
++        { INTERFACE_CONVENTIONAL_PCI_DEVICE },
++        { },
++    };
++    static const TypeInfo quememu_info =
++    {
++        .name = TYPE_PCI_QUEMEMU_DEVICE,
++        .parent = TYPE_PCI_DEVICE,
++        .instance_size = sizeof(QueMemuState),
++        .instance_init = quememu_instance_init,
++        .class_init = quememu_class_init,
++        .interfaces = interfaces,
++    };
++
++    type_register_static(&quememu_info);
++}
++
++type_init(pci_quememu_register_types)

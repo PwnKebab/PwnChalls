@@ -1,0 +1,37 @@
+version: '3'
+services:
+  pwn1:
+    build: .
+    restart: always
+    ports:
+      - "2227:22"
+    environment:
+        PASSWORD: ${PASSWORD1}
+  pwn2:
+    build: .
+    restart: always
+    ports:
+      - "2228:22"
+    environment:
+        PASSWORD: ${PASSWORD2}
+  pwn3:
+    build: .
+    restart: always
+    ports:
+      - "2229:22"
+    environment:
+        PASSWORD: ${PASSWORD3}
+  pwn4:
+    build: .
+    restart: always
+    ports:
+      - "2230:22"
+    environment:
+        PASSWORD: ${PASSWORD4}
+  pwn5:
+    build: .
+    restart: always
+    ports:
+      - "2231:22"
+    environment:
+        PASSWORD: ${PASSWORD5}
