@@ -5,6 +5,7 @@
 | Name                                                                | Summary    |
 | ------------------------------------------------------------------- | ----------- |
 | [Quememu HackOn 2024](Created/HackOn2024/Quememu)         | Qemu Escape      |
+| [Kerbab HackOn 2024](Created/HackOn2024/Kerbab)         | Slub off by one to escape seccomp      |
 | [Durum Mixto HackOn 2023](Created/HackOn2023/Durum_Mixto)                             | TOCTOU      |
 | [Durum Queso HackOn 2023](Created/HackOn2023/Durum_Queso)                       | TOCTOU      |
 | [Kebab Amigo HackOn 2023](Created/HackOn2023/Kebab_Amigo)         | ROP Chain      |
