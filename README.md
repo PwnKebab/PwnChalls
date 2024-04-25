@@ -15,4 +15,4 @@
 
 | Name                                                                | Summary    |
 | ------------------------------------------------------------------- | ----------- |
-| [Control Room HTB Cyber Apocalypse 2023](Others/HTB/ControlRoom)         | Getting arbitrary read from an arbitrary write.      |
+| [Control Room HTB Cyber Apocalypse 2023](Others/HTB/ControlRoom)         | Getting arbitrary read from an arbitrary write      |
