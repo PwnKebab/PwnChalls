@@ -1,0 +1,10 @@
+version: "3"
+services:
+  bacon_frito:
+    build: .
+    platform: linux/amd64
+    restart: always
+    ports:
+      - "3067:3067"
+    expose:
+      - "3067"
